@@ -1,0 +1,10 @@
+<RCC>
+    <qresource prefix="/">
+        <file>icon/cpu.png</file>
+        <file>icon/hdd.png</file>
+        <file>icon/Memory.png</file>
+        <file>icon/network.png</file>
+        <file>icon/serial_port.png</file>
+        <file>icon/Thermometer.ico</file>
+    </qresource>
+</RCC>

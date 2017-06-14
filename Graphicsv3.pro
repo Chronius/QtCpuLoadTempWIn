@@ -5,10 +5,11 @@
 #-------------------------------------------------
 
 QT       += core gui printsupport serialport
+QMAKE_CXXFLAGS += /FS
 
-greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
+greaterThan(QT_MAJOR_VERSION, 4): QT += widgets network
 
-TARGET = Graphics
+TARGET = Graphicsv3
 TEMPLATE = app
 
 # The following define makes your compiler emit warnings if you use
@@ -36,7 +37,10 @@ HEADERS  += mainwindow.h \
     CpuLoad/targetver.h \
     InfoSysTree.h \
     SerialPort.h \
-    pythonstarter.h
+    pythonstarter.h \
+    network.h \
+    KtoolGet.h \
+    KToolTemp.h
 
 FORMS    += mainwindow.ui
 

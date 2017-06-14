@@ -8,12 +8,19 @@
 #include <QTime>
 
 #include <QString>
+#include <QThread>
 
 #include "CpuLoad/stdafx.h"
 
 #include "CpuLoad/CpuPerfomance.h"
 #include <QVector>
 #include <iterator>
+#include "InfoSysTree.h"
+#include "pythonstarter.h"
+#include "ktoolget.h"
+#include "KToolTemp.h"
+
+
 #define TIMER_DELAY 1000
 
 namespace Ui {
@@ -37,25 +44,52 @@ private:
 
     int foo = 0;
     int TimesCount = 0;
+    int CoreNum = 0;
 
     QMap<QString, int> QMapCorePerfFoo;
     std::map<std::string, int> MapCorePerfFoo;
     CpuPerfomance CpuPerf;
+
+
+    QStringList TreeNodeListTemp;
+    QStringList TreeNodeListVolt;
+
     QVector<double>::iterator income_p;
     QVector <double> GraphTimes;
     QVector <double> GraphLoadCpu;
+    QVector <double> GraphTempCpu;
+    InfoSysTree  *InfoSysTreeView;
+
+    Worker *wrk;
+    KToolInfo *Ktl;
+    KToolTempInfo *KtlTemp;
+
+    QMap<QString, Worker*> WrkMap;
+
+    void resizeEvent(QResizeEvent *);
+
+    void UpdateTreeView();
+
+public slots:
+
+    void updateTime();          // Слот для обновления времени на экране
+
 private slots:
     void slotRangeChanged (const QCPRange &newRange);
     void setupPlot(QCustomPlot * plot);
     void SetupGraphic();
     void CustomPlot(QCustomPlot * plot);
     void DisplayPlot(QCustomPlot * plot);
-    void updateTime();          // Слот для обновления времени на экране
+
     void InitPerfCounter();
     void PlotLoadCpu();
     void PlotTempCpu(QString str);
 
-    QString PyTestRead();
+    void InfoSysTreeInit();
+    void UpdateTreeSensor();
+
+    QString PyInfoRead(QString argc);
+
 };
 
 #endif // MAINWINDOW_H

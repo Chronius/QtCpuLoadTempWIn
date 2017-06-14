@@ -2,6 +2,11 @@
 #include "ui_mainwindow.h"
 #include <QDebug>
 #include <QDir>
+#include "SerialPort.h"
+#include "network.h"
+#include "KtoolGet.h"
+
+#define RES 4
 
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
@@ -13,27 +18,26 @@ MainWindow::MainWindow(QWidget *parent) :
 
     tmr = new QTimer(this); // Создаем объект класса QTimer и передаем адрес переменной
     tmr->setInterval(TIMER_DELAY); // Задаем интервал таймера
-    connect(tmr, SIGNAL(timeout()), this, SLOT(updateTime())); // Подключаем сигнал таймера к нашему слоту
-    tmr->start(); // Запускаем таймер
 
     SetupGraphic();
     CustomPlot(ui->plot_2);
     CustomPlot(ui->plot);
 
 
+    ui->plot_2->addGraph();
+
     ui->plot_2->graph(0)->setPen(QPen(QColor(0, 255, 0), 2));
     ui->plot_2->graph(0)->setBrush(QBrush(QColor(34, 177, 76, 120)));
-    ui->plot_2->graph(0)->setName("Temp");
+    ui->plot_2->graph(0)->setName("CPU Temp");
+
+    ui->plot_2->graph(1)->setPen(QPen(QColor(255, 0, 0), 2));
+    ui->plot_2->graph(1)->setBrush(QBrush(QColor(200, 34, 34, 120)));
+    ui->plot_2->graph(1)->setName("SYS Temp");
 
     ui->plot->addGraph(); // add Graph 0
     ui->plot->addGraph(); // add Graph 1
     ui->plot->addGraph(); // add Graph 2
     ui->plot->addGraph(); // add Graph 3
-//    ui->plot->graph()->setPen(QPen(Qt::red));
-//    ui->plot->graph(0)->setPen(QPen(Qt::green));
-//    ui->plot->graph(1)->setPen(QPen(Qt::darkYellow));
-//    ui->plot->graph(2)->setPen(QPen(Qt::darkCyan));
-//    ui->plot->graph(3)->setPen(QPen(Qt::magenta));
 
     ui->plot->graph()->setPen(QPen(QColor(255, 0, 0), 2));
     ui->plot->graph(0)->setPen(QPen(QColor(0, 255, 0), 2));
@@ -49,12 +53,109 @@ MainWindow::MainWindow(QWidget *parent) :
 
     DisplayPlot(ui->plot);
     DisplayPlot(ui->plot_2);
+
+    InfoSysTreeInit();
+
+
+    //connect(PyStarter, SIGNAL(updateTree(QString,QString,QString)), InfoSysTreeView, SLOT(SetValue(QString,QString,QString)));
+    //connect(PyStarter, SIGNAL(updatePlot(QString)), this, SLOT(updateTime(QString)));
+
+    connect(tmr, SIGNAL(timeout()),this,SLOT(updateTime()));
+
+    WrkMap["Память"] = new Worker("mem",0);
+    WrkMap["Жесткие диски"] = new Worker("hard",0);
+    WrkMap["Сетевые интерфейсы"] = new Worker("eth",0);
+
+
+    tmr->start();
+
 }
 
 MainWindow::~MainWindow()
 {
+
     delete ui;
+
 }
+
+void MainWindow::resizeEvent(QResizeEvent *)
+{
+    QList<int> sizes;
+    sizes << ui->centralWidget->width()/3 << 2 * ui->centralWidget->width()/3;
+    ui->splitter_2->setSizes(sizes);
+
+
+#ifndef QT_DEBUG
+
+    ui->treeWidget->setColumnWidth(0,3 * ui->treeWidget->width()/4);
+    ui->treeWidget->setColumnWidth(1,ui->treeWidget->width()/4);
+
+#endif
+
+}
+
+void MainWindow::UpdateTreeView(){
+
+    qDebug()<<"Update tree view";
+
+    foreach (QString key, WrkMap.keys()) {
+
+        if(!WrkMap[key]->isProcessing()){
+
+            QStringList report = WrkMap[key]->GetReport();
+
+            QStringList outrep;
+
+            int Delay = 0;
+
+            if((key == "Жесткие диски")||
+                (key == "Память")||
+                    (key == "Сетевые интерфейсы")){
+
+                for(int i = 1; i < report.length(); i+=2){
+
+                    outrep.append(report[i]);
+
+                }
+
+            } else {
+
+                outrep = report;
+
+            }
+
+            InfoSysTreeView->SetValue(key, outrep);
+
+            if(key == "Жесткие диски"){
+
+                continue;
+
+            }
+            if(key == "Память"){
+
+                Delay = 8;
+
+            }
+
+            if(key == "Сетевые интерфейсы"){
+
+                continue;
+
+            }
+
+            qDebug()<<"Starting script:" << key;
+
+            WrkMap[key]->Start(Delay);
+
+        }
+
+    }
+
+
+
+
+}
+
 
 void MainWindow::slotRangeChanged(const QCPRange &newRange)
 {
@@ -64,7 +165,214 @@ void MainWindow::slotRangeChanged(const QCPRange &newRange)
      * */
 //    ui->plot->xAxis->setDateTimeFormat((newRange.size() <= 86400)? "hh:mm" : "dd MMM yy");
 }
+void MainWindow::InfoSysTreeInit()
+{
+    QList<TreeNode> TreeNodeList;
 
+    QString output;
+    QStringList listOutput;
+    TreeNode Node;
+
+    /*-----------------------------------------------------------------
+     * DEBUG LINE
+     *-----------------------------------------------------------------*/
+
+//    KtlTemp = new KToolTempInfo();
+//    QStringList Ktoollist = KtlTemp->GetSensorName();
+
+//    if(Ktoollist.size())
+//    {
+//        listOutput = output.split("\r\n");
+
+//        Node.Name = "Debug";
+//        Node.Icon = QIcon(":/icon/cpu.png");
+
+//        Node.List = Ktoollist;
+
+//        TreeNodeList.append(Node);
+//        Node.List.clear();
+//    }
+
+    /*-----------------------------------------------------------------
+     * CPU
+     *-----------------------------------------------------------------*/
+
+    output = PyInfoRead("cpu");
+
+    if (output != "")
+    {
+        listOutput = output.split("\r\n");
+
+        Node.Name = "Процессор";
+        Node.Icon = QIcon(":/icon/cpu.png");
+        CoreNum = listOutput[1].toInt();
+
+        for(int core_num = 0; core_num < CoreNum; core_num++)
+        {
+            Node.List << listOutput[0];
+        }
+        TreeNodeList.append(Node);
+        Node.List.clear();
+    }
+
+    /*-----------------------------------------------------------------
+     * RAM Memory
+     *-----------------------------------------------------------------*/
+    output = PyInfoRead("mem");
+    listOutput = output.split("\r\n");
+
+    if (output != "")
+    {
+        Node.Name = "Память";
+        Node.Icon = QIcon(":/icon/Memory.png");
+
+        for(int i=0; i < listOutput.size() - 1; i+=2){
+
+            Node.List << listOutput[i];
+
+        }
+        TreeNodeList.append(Node);
+        Node.List.clear();
+    }
+
+    /*-----------------------------------------------------------------
+     * HARD DRIVE
+     *-----------------------------------------------------------------*/
+    output = PyInfoRead("hard");
+    listOutput = output.split("\r\n");
+
+    if (output != "")
+    {
+        Node.Name = "Жесткие диски";
+        Node.Icon = QIcon(":/icon/hdd.png");
+
+        for(int i=0; i < listOutput.size() - 1; i+=2){
+
+            Node.List << listOutput[i];
+
+        }
+        TreeNodeList.append(Node);
+        Node.List.clear();
+    }
+
+    /*-----------------------------------------------------------------
+     * ETHERNET
+     *-----------------------------------------------------------------*/
+    output = PyInfoRead("eth");
+    listOutput = output.split("\r\n");
+
+    if (output != "")
+    {
+        listOutput.removeAt(listOutput.size()-1);
+
+        Node.Name = "Сетевые интерфейсы";
+        Node.Icon = QIcon(":/icon/network.png");
+
+        for(int i=0; i < listOutput.size() - 1; i+=2){
+
+            Node.List << listOutput[i];
+
+        }
+
+        TreeNodeList.append(Node);
+        Node.List.clear();
+    }
+
+
+    /*-----------------------------------------------------------------
+     * Serial Port
+     *-----------------------------------------------------------------*/
+    SerialPort SPort;
+    QStringList SPortList = SPort.getListPorts(QString("RTSoft"));
+    if(SPortList.size()){
+
+        Node.Name = "Последовательные интерфейсы RS422/485";
+        Node.Icon = QIcon(":/icon/serial_port.png");
+        Node.List = SPortList;
+
+        TreeNodeList.append(Node);
+
+    }
+    Node.List.clear();
+
+    /*-----------------------------------------------------------------
+     * Temperature sensor
+     *-----------------------------------------------------------------*/
+
+    KtlTemp = new KToolTempInfo();
+    QStringList Ktoollist = KtlTemp->GetSensorName();
+
+    if(Ktoollist.size())
+    {
+        listOutput = output.split("\r\n");
+
+        Node.Name = "Датчики температуры";
+        Node.Icon = QIcon(":/icon/Thermometer.ico");
+
+        Node.List = Ktoollist;
+
+        TreeNodeList.append(Node);
+        Node.List.clear();
+    }
+
+//    output = PyInfoRead("temp");
+//    listOutput = output.split("\r\n");
+
+//    if (output != "")
+//    {
+//        Node.Name = "Датчики температуры";
+//        Node.Icon = QIcon(":/icon/Thermometer.ico");
+
+//        for(int i=0; i < listOutput.size() - 1; i+=2){
+
+//            Node.List << listOutput[i];// + "\t" + listOutput[i + 1];
+
+//        }
+//        TreeNodeList.append(Node);
+
+//        TreeNodeListTemp = Node.List;
+//        Node.List.clear();
+//    }
+    /*-----------------------------------------------------------------
+     * Voltage sensor
+     *-----------------------------------------------------------------*/
+
+
+    Ktl = new KToolInfo();
+    QStringList Templist = Ktl->GetSensorName();
+
+    if(Templist.size())
+    {
+        Node.Name = "Датчики напряжения питания";
+        Node.Icon = QIcon(":/icon/cpu.png");
+
+        Node.List = Templist;
+
+        TreeNodeList.append(Node);
+        TreeNodeListTemp = Node.List;
+        Node.List.clear();
+    }
+
+//        output = PyInfoRead("volt");
+//        listOutput = output.split("\r\n");
+//    if (output != "")
+//    {
+//        Node.Name = "Датчики напряжения питания";
+//        Node.Icon = QIcon(":/icon/cpu.png");
+
+//        for(int i=0; i < listOutput.size() - 1; i+=2){
+
+//            Node.List << listOutput[i];// + "\t" + listOutput[i + 1];
+
+//        }
+//        TreeNodeList.append(Node);
+//        TreeNodeListVolt = Node.List;
+//        Node.List.clear();
+//    }
+        InfoSysTreeView = new InfoSysTree(ui->treeWidget, TreeNodeList);
+
+
+}
 
 /******************************************************************************************************************/
 /* Setup the plot area */
@@ -76,10 +384,8 @@ void MainWindow::SetupGraphic()
     graphic2 = new QCPGraph(ui->plot_2->xAxis, ui->plot_2->yAxis);
 
     ui->plot->addPlottable(graphic);  // Устанавливаем график на полотно
-//    graphic->setName("CPU Usage");       // Устанавливаем
 
     ui->plot_2->addPlottable(graphic2);
-//    graphic2->setName("CPU2 Usage");
 
     graphic->setAntialiased(false);         // Отключаем сглаживание, по умолчанию включено
     graphic->setLineStyle(QCPGraph::lsLine);
@@ -90,7 +396,6 @@ void MainWindow::SetupGraphic()
 
 void MainWindow::setupPlot(QCustomPlot * plot)
 {
-
     plot->clearItems();                                                              // Remove everything from the plot
 
     QLinearGradient plotGradient;
@@ -107,9 +412,7 @@ void MainWindow::setupPlot(QCustomPlot * plot)
     axisRectGradient.setColorAt(1, QColor(30, 30, 30));
     plot->axisRect()->setBackground(axisRectGradient);
 
-
     plot->setBackground(QBrush(QColor(48,47,47)));
-
 }
 
 void MainWindow::CustomPlot(QCustomPlot * plot)
@@ -143,7 +446,6 @@ void MainWindow::CustomPlot(QCustomPlot * plot)
      * */
     connect(plot->xAxis, SIGNAL(rangeChanged(QCPRange)),
             this, SLOT(slotRangeChanged(QCPRange)));
-
 }
 
 void MainWindow::DisplayPlot(QCustomPlot * plot)
@@ -165,32 +467,31 @@ void MainWindow::updateTime()
 
     QString s;
 
-    s = PyTestRead();
+    /*if (s != "")
+    {
+        PlotTempCpu(s);
+    }*/
 
-    PlotTempCpu(s);
-    qDebug()<< "QLOAD" << s <<endl;
     QMapCorePerfFoo = CpuPerf.QGetPerfomance();
     for (auto it = QMapCorePerfFoo.begin(); it != QMapCorePerfFoo.end(); ++it)
     {
-        qDebug()<< "QMapMainDebug"<<it.key()<< it.value();
         s += "Core #" + it.key() + "  " + QString::number(it.value())+"\n";
         GraphLoadCpu.append(it.value());
     }
-
-    ui->textBrowser->setText(s);
     MapCorePerfFoo.clear();
 
     PlotLoadCpu();
 
-    ui->plot_2->graph()->addData(foo, QMapCorePerfFoo.begin().value());
     GraphLoadCpu.clear();
     ui->plot->replot();
 
-    ui->plot_2->xAxis->setDateTimeFormat("hh:mm:ss");
     ui->plot_2->xAxis->setRange(foo-60, foo);
     ui->plot_2->replot();
     foo += 1;
 
+    UpdateTreeSensor();
+
+    UpdateTreeView();
 }
 
 void MainWindow::PlotLoadCpu()
@@ -199,19 +500,92 @@ void MainWindow::PlotLoadCpu()
     ui->plot->xAxis->setRange(foo-60, foo);
 
     //Добавление новых значений на график
-    ui->plot->graph()->addData(foo, GraphLoadCpu[0]);
-    ui->plot->graph(0)->addData(foo, GraphLoadCpu[1]);
-    ui->plot->graph(1)->addData(foo, GraphLoadCpu[2]);
-    ui->plot->graph(2)->addData(foo, GraphLoadCpu[3]);
-    ui->plot->graph(3)->addData(foo, GraphLoadCpu[4]);
+//    ValList << QString::number((int)GraphLoadCpu[0]) + " %";
+
+//    ui->plot->graph(0)->addData(foo, GraphLoadCpu[1]);
+//    ValList << QString::number((int)GraphLoadCpu[1]) + " %";
+
+//    ui->plot->graph(1)->addData(foo, GraphLoadCpu[2]);
+//    ui->plot->graph(2)->addData(foo, GraphLoadCpu[3]);
+//    ui->plot->graph(3)->addData(foo, GraphLoadCpu[4]);
+
+    QStringList ValList;
+
+    for(int core_num = 0; core_num < CoreNum; core_num++)
+    {
+
+       if(core_num == 0){
+
+            ui->plot->graph()->addData(foo, GraphLoadCpu[core_num]);
+
+       }else{
+
+            ui->plot->graph(core_num-1)->addData(foo, GraphLoadCpu[core_num]);
+
+       }
+
+        ValList << QString::number((int)GraphLoadCpu[core_num]) + " %";
+
+    }
+
+    InfoSysTreeView->SetValue("Процессор",ValList);
+
+}
+
+void MainWindow::UpdateTreeSensor()
+{
+    QStringList ValList;
+    double value;
+
+    for(int i = 0; i < Ktl->GetSensorCount(); i++)
+    {
+        ValList << QString::number(Ktl->GetSensorValue(i));
+    }
+
+    InfoSysTreeView->SetValue("Датчики напряжения питания", ValList);
+    ValList.clear();
+
+    for(int i = 0; i < KtlTemp->GetSensorCount(); i++)
+    {
+        value = KtlTemp->GetSensorValue(i);
+        ValList << QString::number(value);
+        GraphTempCpu.append(value);
+    }
+
+    ui->plot_2->graph()->addData(foo, GraphTempCpu[0]);
+    ui->plot_2->graph(0)->addData(foo, GraphTempCpu[1]);
+
+    GraphTempCpu.clear();
+
+    InfoSysTreeView->SetValue("Датчики температуры", ValList);
+
 }
 
 void MainWindow::PlotTempCpu(QString str)
 {
-    QString load;
-    load.append(str.at(2));
+    str.chop(1);
+    QStringList load = str.split("\r\n");;
+    QString listString;
+    double dec;
+    bool ok;
+    for (int i = 0; i < load.size()-1; i += 2)
+    {
+          dec = load[i+1].toDouble(&ok);
+          if (ok)
+          {
+              qDebug()<< "PlotTempCpu " + load[i] << dec;
+              GraphTempCpu.append(dec);
 
-    qDebug()<< "LOAD" << load << endl;
+//              emit updateTree("Датчики температуры", load[i], QString::number(dec));
+
+//              emit updateTree("Датчики температуры", load[i], QString::number(dec));
+//              emit updateTree("Датчики температуры", load[i], QString::number(10));
+          }
+    }
+    ui->plot_2->graph()->addData(foo, GraphTempCpu[0]);
+    ui->plot_2->graph(0)->addData(foo, GraphTempCpu[1]);
+
+    GraphTempCpu.clear();
 }
 
 void MainWindow::InitPerfCounter()
@@ -220,25 +594,28 @@ void MainWindow::InitPerfCounter()
 }
 
 
-QString MainWindow::PyTestRead()
+QString MainWindow::PyInfoRead(QString argc)
 {
+    QString output = "";
     QProcess process;
 
-//    QString CurrentPath = QDir::currentPath();
-//    QString CurrentPath = QDir::current().absolutePath();
-    QString CurrentPath = "C:\\Users\\abuzarov_bv\\Documents\\Graphicv2";
-    //process.start( "python " + CurrentPath + "//CpuLoad//CPU_load.py");
+    //QString CurrentPath = "C:\\Users\\abuzarov_bv\\Documents\\Graphicv2";
 
-    process.start( "python " + CurrentPath + "//CPU_load.py");
+#ifdef QT_DEBUG
 
+    QString CurrentPath = QDir::currentPath() + "//..//";
+
+#else
+
+    QString CurrentPath = QDir::currentPath() + "//..//";
+
+#endif
+
+    process.start( "python " + CurrentPath + "//hw_info.py " + argc);
     if( !process.waitForStarted() || !process.waitForFinished() ) {
-        return 0;
+        return output;
     }
-
-    //while(!process.waitForStarted() || !process.waitForFinished());
-    QString output(process.readAllStandardOutput());
+    output.append(process.readAllStandardOutput());
+    qDebug() << "PyInfoRead" <<output << endl;
     return output;
-    qDebug() << process.readAllStandardError();
-    qDebug() << process.readAllStandardOutput();
 }
-

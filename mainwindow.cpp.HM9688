@@ -1,0 +1,389 @@
+#include "mainwindow.h"
+#include "ui_mainwindow.h"
+#include <QDebug>
+#include <QDir>
+#include "SerialPort.h"
+
+#define CPU_CORES 4
+
+MainWindow::MainWindow(QWidget *parent) :
+    QMainWindow(parent),
+    ui(new Ui::MainWindow)
+{
+    ui->setupUi(this);
+
+    InitPerfCounter(); // Инициализация конструктора для получения загруженности CPU
+
+    tmr = new QTimer(this); // Создаем объект класса QTimer и передаем адрес переменной
+    tmr->setInterval(TIMER_DELAY); // Задаем интервал таймера
+    connect(tmr, SIGNAL(timeout()), this, SLOT(updateTime())); // Подключаем сигнал таймера к нашему слоту
+    tmr->start(); // Запускаем таймер
+
+    SetupGraphic();
+    CustomPlot(ui->plot_2);
+    CustomPlot(ui->plot);
+
+
+    ui->plot_2->addGraph();
+
+    ui->plot_2->graph(0)->setPen(QPen(QColor(0, 255, 0), 2));
+    ui->plot_2->graph(0)->setBrush(QBrush(QColor(34, 177, 76, 120)));
+    ui->plot_2->graph(0)->setName("CPU Temp");
+
+    ui->plot_2->graph(1)->setPen(QPen(QColor(255, 0, 0), 2));
+    ui->plot_2->graph(1)->setBrush(QBrush(QColor(200, 34, 34, 120)));
+    ui->plot_2->graph(1)->setName("SYS Temp");
+
+    ui->plot->addGraph(); // add Graph 0
+    ui->plot->addGraph(); // add Graph 1
+    ui->plot->addGraph(); // add Graph 2
+    ui->plot->addGraph(); // add Graph 3
+
+    ui->plot->graph()->setPen(QPen(QColor(255, 0, 0), 2));
+    ui->plot->graph(0)->setPen(QPen(QColor(0, 255, 0), 2));
+    ui->plot->graph(1)->setPen(QPen(QColor(255, 128, 64), 2));
+    ui->plot->graph(2)->setPen(QPen(QColor(82, 139, 152), 2));
+    ui->plot->graph(3)->setPen(QPen(QColor(0, 255, 255), 2));
+
+    ui->plot->graph()->setName("Core #1");
+    ui->plot->graph(0)->setName("Core #2");
+    ui->plot->graph(1)->setName("Core #3");
+    ui->plot->graph(2)->setName("Core #4");
+    ui->plot->graph(3)->setName("Total ");
+
+    DisplayPlot(ui->plot);
+    DisplayPlot(ui->plot_2);
+
+    InfoSysTreeInit();
+
+    PyStarter = new PythonStarter();
+
+    PyInfoRead("mem");
+
+}
+
+MainWindow::~MainWindow()
+{
+    delete ui;
+}
+
+void MainWindow::resizeEvent(QResizeEvent *)
+{
+    QList<int> sizes;
+    sizes << ui->centralWidget->width()/3 << 2 * ui->centralWidget->width()/3;
+    ui->splitter_2->setSizes(sizes);
+
+
+    ui->treeWidget->setColumnWidth(0,3 * ui->treeWidget->width()/4);
+    ui->treeWidget->setColumnWidth(1,ui->treeWidget->width()/4);
+}
+
+
+void MainWindow::slotRangeChanged(const QCPRange &newRange)
+{
+    /* Если область видимости графика меньше одного дня,
+     * то отображаем часы и минуты по Оси X,
+     * в противном случае отображаем дату "День Месяц Год"
+     * */
+//    ui->plot->xAxis->setDateTimeFormat((newRange.size() <= 86400)? "hh:mm" : "dd MMM yy");
+}
+
+void MainWindow::InfoSysTreeInit()
+{
+    QList<TreeNode> TreeNodeList;
+
+    TreeNode Node;
+
+    Node.Name = "Процессор";
+    Node.Icon = QIcon(":/icon/cpu.png");
+
+    for(int core_num = 0; core_num < CPU_CORES; core_num++){
+
+        Node.List << QString("Ядро %1:").arg(core_num);
+
+    }
+
+    TreeNodeList.append(Node);
+    Node.List.clear();
+
+    Node.Name = "Память";
+    Node.Icon = QIcon(":/icon/Memory.png");
+    Node.List << "Всего:" << "Доступно:" << "Свободно:";
+    TreeNodeList.append(Node);
+    Node.List.clear();
+
+    Node.Name = "Жесткие диски";
+    Node.Icon = QIcon(":/icon/hdd.png");
+    Node.List << "Диск 0" << "Диск 1";
+    TreeNodeList.append(Node);
+    Node.List.clear();
+
+    Node.Name = "Сетевые интерфейсы";
+    Node.Icon = QIcon(":/icon/network.png");
+    Node.List << "Сеть 0" << "Сеть 1";
+    TreeNodeList.append(Node);
+    Node.List.clear();
+
+    SerialPort SPort;
+
+    QStringList SPortList = SPort.getListPorts(QString("RTSoft"));
+
+    if(SPortList.size()){
+
+        Node.Name = "Последовательные интерфейсы RS422/485";
+        Node.Icon = QIcon(":/icon/serial_port.png");
+        Node.List = SPortList;
+
+        TreeNodeList.append(Node);
+
+    }
+
+
+    Node.Name = "Датчики температуры";
+    Node.Icon = QIcon(":/icon/Thermometer.ico");
+    Node.List.clear();
+    Node.List << "Температура ЦПУ" << "Температура платы";
+    TreeNodeList.append(Node);
+
+    Node.Name = "Датчики напряжения питания";
+    Node.Icon = QIcon(":/icon/cpu.png");
+    Node.List.clear();
+    Node.List << "VBat" << "3.3V";
+    TreeNodeList.append(Node);
+
+    InfoSysTreeView = new InfoSysTree(ui->treeWidget, TreeNodeList);
+}
+
+/******************************************************************************************************************/
+/* Setup the plot area */
+/******************************************************************************************************************/
+void MainWindow::SetupGraphic()
+{
+    // Инициализируем график и привязываем его к Осям
+    graphic = new QCPGraph(ui->plot->xAxis, ui->plot->yAxis);
+    graphic2 = new QCPGraph(ui->plot_2->xAxis, ui->plot_2->yAxis);
+
+    ui->plot->addPlottable(graphic);  // Устанавливаем график на полотно
+
+    ui->plot_2->addPlottable(graphic2);
+
+    graphic->setAntialiased(false);         // Отключаем сглаживание, по умолчанию включено
+    graphic->setLineStyle(QCPGraph::lsLine);
+
+    graphic2->setAntialiased(false);         // Отключаем сглаживание, по умолчанию включено
+    graphic2->setLineStyle(QCPGraph::lsLine);
+}
+
+void MainWindow::setupPlot(QCustomPlot * plot)
+{
+    plot->clearItems();                                                              // Remove everything from the plot
+
+    QLinearGradient plotGradient;
+    plotGradient.setStart(0, 0);
+    plotGradient.setFinalStop(0, 350);
+    plotGradient.setColorAt(0, QColor(80, 80, 80));
+    plotGradient.setColorAt(1, QColor(50, 50, 50));
+    plot->setBackground(plotGradient);
+
+    QLinearGradient axisRectGradient;
+    axisRectGradient.setStart(0, 0);
+    axisRectGradient.setFinalStop(0, 350);
+    axisRectGradient.setColorAt(0, QColor(80, 80, 80));
+    axisRectGradient.setColorAt(1, QColor(30, 30, 30));
+    plot->axisRect()->setBackground(axisRectGradient);
+
+    plot->setBackground(QBrush(QColor(48,47,47)));
+}
+
+void MainWindow::CustomPlot(QCustomPlot * plot)
+{
+    plot->setInteraction(QCP::iRangeZoom,true);   // Включаем взаимодействие удаления/приближения
+    plot->setInteraction(QCP::iRangeDrag, true);  // Включаем взаимодействие перетаскивания графика
+    plot->axisRect()->setRangeDrag(Qt::Horizontal);   // Включаем перетаскивание только по горизонтальной оси
+    plot->axisRect()->setRangeZoom(Qt::Horizontal);   // Включаем удаление/приближение только по горизонтальной оси
+    plot->xAxis->setTickLabelType(QCPAxis::ltDateTime);   // Подпись координат по Оси X в качестве Даты и Времени
+    plot->xAxis->setDateTimeFormat("hh:mm:ss");  // Устанавливаем формат даты и времени
+
+    plot->xAxis->setTickLabelFont(QFont(QFont().family(), 8));
+    plot->yAxis->setTickLabelFont(QFont(QFont().family(), 8));
+
+    plot->xAxis2->setVisible(true);
+    plot->yAxis2->setVisible(true);
+    plot->xAxis2->setTicks(false);
+    plot->yAxis2->setTicks(false);
+    plot->xAxis2->setTickLabels(false);
+    plot->yAxis2->setTickLabels(false);
+
+    plot->xAxis->setTickLabelColor(QColor(Qt::white));
+    plot->yAxis->setTickLabelColor(QColor(Qt::white));
+    plot->legend->setVisible(true);   //Включаем Легенду графика
+    // Устанавливаем Легенду в левый верхний угол графика
+    plot->axisRect()->insetLayout()->setInsetAlignment(0, Qt::AlignLeft|Qt::AlignTop);
+
+    setupPlot(plot);
+    /* Подключаем сигнал от Оси X об изменении видимого диапазона координат
+     * к СЛОТу для переустановки формата времени оси.
+     * */
+    connect(plot->xAxis, SIGNAL(rangeChanged(QCPRange)),
+            this, SLOT(slotRangeChanged(QCPRange)));
+}
+
+void MainWindow::DisplayPlot(QCustomPlot * plot)
+{
+    foo = QDateTime::currentDateTime().toTime_t();
+
+    plot->xAxis->setDateTimeFormat("hh:mm:ss");
+    plot->xAxis->setRange(foo, foo+60);
+
+    plot->yAxis->setRange(0, 100);
+    plot->replot();           // Отрисовываем график
+}
+
+void MainWindow::updateTime()
+{
+    ui->label->setText(QTime::currentTime().toString());
+
+    foo = QDateTime::currentDateTime().toTime_t();
+
+    QString s, p;
+
+    s = PyTestRead();
+    if (s != "")
+    {
+        PlotTempCpu(s);
+    }
+    //s += PyInfoRead("mem");
+    //s += PyInfoRead("cpu");
+    //s += PyInfoRead("com");
+    //s += PyInfoRead("volt");
+    //s += PyInfoRead("hard");
+
+    QMapCorePerfFoo = CpuPerf.QGetPerfomance();
+    for (auto it = QMapCorePerfFoo.begin(); it != QMapCorePerfFoo.end(); ++it)
+    {
+//        qDebug()<< "QMapMainDebug"<<it.key()<< it.value();
+        s += "Core #" + it.key() + "  " + QString::number(it.value())+"\n";
+        GraphLoadCpu.append(it.value());
+    }
+
+//    ui->textBrowser->setText(s);
+    MapCorePerfFoo.clear();
+
+    PlotLoadCpu();
+
+//    ui->plot_2->graph()->addData(foo, QMapCorePerfFoo.begin().value());
+    GraphLoadCpu.clear();
+    ui->plot->replot();
+
+    ui->plot_2->xAxis->setDateTimeFormat("hh:mm:ss");
+    ui->plot_2->xAxis->setRange(foo-60, foo);
+    ui->plot_2->replot();
+    foo += 1;
+}
+
+void MainWindow::PlotLoadCpu()
+{
+    ui->plot->xAxis->setDateTimeFormat("hh:mm:ss");
+    ui->plot->xAxis->setRange(foo-60, foo);
+
+    //Добавление новых значений на график
+    ui->plot->graph()->addData(foo, GraphLoadCpu[0]);
+    ui->plot->graph(0)->addData(foo, GraphLoadCpu[1]);
+    ui->plot->graph(1)->addData(foo, GraphLoadCpu[2]);
+    ui->plot->graph(2)->addData(foo, GraphLoadCpu[3]);
+    ui->plot->graph(3)->addData(foo, GraphLoadCpu[4]);
+
+    for(int core_num = 0; core_num < CPU_CORES; core_num++)
+    {
+        emit updateTree("Процессор", QString("Ядро %1:").arg(core_num), QString::number(GraphLoadCpu[core_num]) + " %");
+    }
+}
+
+void MainWindow::PlotTempCpu(QString str)
+{
+    str.chop(1);
+    QStringList load = str.split("\n");
+    QString listString;
+    double dec;
+    bool ok;
+    for (int i = 0; i < load.size(); i++)
+    {
+          load[i].chop(1);
+          listString = load[i].rightRef(4).toString();
+
+          dec = listString.toDouble(&ok);
+          if (ok)
+          {
+              qDebug()<< "PlotTempCpu " + QString::number(i) << dec;
+              GraphTempCpu.append(dec);
+          }
+    }
+//    qDebug()<< "PlotTempCpu0" << GraphTempCpu[0] << endl;
+//    qDebug()<< "PlotTempCpu1" << GraphTempCpu[1] << endl;
+    ui->plot_2->graph()->addData(foo, GraphTempCpu[0]);
+    ui->plot_2->graph(0)->addData(foo, GraphTempCpu[1]);
+
+    GraphTempCpu.clear();
+}
+
+void MainWindow::InitPerfCounter()
+{
+    CpuPerf.CpuPerfomanceInit();
+}
+
+
+QString MainWindow::PyTestRead()
+{
+    QProcess process;
+    QString output;
+
+    QString CurrentPath = QDir::currentPath() + "//..//Graphicv2//";
+//    QString CurrentPath = QDir::current().absolutePath();
+    //process.start( "python " + CurrentPath + "//CpuLoad//CPU_load.py");
+    //QString CurrentPath = "C:\\Users\\abuzarov_bv\\Documents\\Graphicv2";
+
+    /*
+     * Закомменитировать на КВ-шке
+     */
+
+    qDebug()<<CurrentPath;
+
+    process.start( "python " + CurrentPath + "//CPU_load.py");
+
+    if( !process.waitForStarted() || !process.waitForFinished() ) {
+        output = "";
+        return output;
+    }
+
+    output.append(process.readAllStandardOutput());
+
+    process.start( "python " + CurrentPath + "//CPU_Temp.py");
+
+    if( !process.waitForStarted() || !process.waitForFinished() ) {
+        output = "";
+        return output;
+    }
+
+    qDebug() << "PyTestRead" <<output << endl;
+    return output;
+    qDebug() << process.readAllStandardError();
+    qDebug() << process.readAllStandardOutput();
+}
+
+QString MainWindow::PyInfoRead(QString argc)
+{
+    QString output = "";
+    QProcess process;
+
+    //QString CurrentPath = "C:\\Users\\abuzarov_bv\\Documents\\Graphicv2";
+    QString CurrentPath = QDir::currentPath() + "//..//Graphicv2\\";
+
+    process.start( "python " + CurrentPath + "//hw_info.py " + argc);
+    if( !process.waitForStarted() || !process.waitForFinished() ) {
+        return output;
+    }
+    output.append(process.readAllStandardOutput());
+    qDebug() << "PyInfoRead" <<output << endl;
+    return output;
+}
+
