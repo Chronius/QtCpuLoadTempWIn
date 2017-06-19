@@ -25,66 +25,109 @@ private:
 
 public:
 
-            InfoSysTree(QTreeWidget *pTrWidget, QList<TreeNode> &TreeNodeList){
+        InfoSysTree(QTreeWidget *pTrWidget, QList<TreeNode> &TreeNodeList){
 
-            pTreeWidget = pTrWidget;
+                pTreeWidget = pTrWidget;
 
-            pTreeWidget->setColumnCount(3);
-            pTreeWidget->setWordWrap(true);
+                pTreeWidget->setColumnCount(3);
+                //pTreeWidget->setColumnMWidth(1,50);
+                pTreeWidget->setWordWrap(true);
 
-#ifndef QT_DEBUG
+                pTreeWidget->header()->setVisible(true);
 
-            pTreeWidget->header()->setVisible(false);
+                pTreeWidget->header()->setDefaultSectionSize(200);
+                pTreeWidget->header()->setMinimumSectionSize(50);
+                pTreeWidget->header()->setStretchLastSection(true);
 
-#endif
+                pTreeWidget->hideColumn(2);
 
-            pTreeWidget->header()->setDefaultSectionSize(200);
-            pTreeWidget->header()->setMinimumSectionSize(80);
-            pTreeWidget->header()->setStretchLastSection(true);
+                if(QTreeWidgetItem* header = pTreeWidget->headerItem()){
 
-            pTreeWidget->setIconSize(QSize(48,48));
+                    QFont font;
+                    font.setFamily(QStringLiteral("Times New Roman"));
+                    font.setPointSize(12);
+                    font.setBold(true);
 
-            QFont font;
-            font.setFamily(QStringLiteral("Times New Roman"));
-            font.setPointSize(14);
-            font.setBold(true);
+                    header->setFont(0, font);
+                    header->setFont(1, font);
+                    header->setText(0, "Конфигурация");
+                    header->setText(1, "Использование");
 
-            QFont font2;
-            font2.setFamily(QStringLiteral("Times New Roman"));
-            font2.setPointSize(12);
+                }
+                else{
 
-            foreach (TreeNode Node, TreeNodeList) {
-
-                QTreeWidgetItem *TreeItem = new QTreeWidgetItem(pTreeWidget);
-
-                TreeItem->setFont(0, font);
-                TreeItem->setIcon(0, Node.Icon);
-                TreeItem->setText(0, Node.Name);
-
-                int i = 0;
-
-                foreach (QString str, Node.List) {
-
-                    QTreeWidgetItem *TreeItemChild = new QTreeWidgetItem(TreeItem);
-                    TreeItemChild->setText(0,str);
-                    TreeItemChild->setFont(0, font2);
-                    TreeItemChild->setFont(1, font2);
-
-                    TreeItemChild->setText(2, QString::number(i++));
-
-                    qDebug()<<"count:"<<i;
+                    pTreeWidget->setHeaderLabel("My Text");
 
                 }
 
-            }
+                pTreeWidget->setIconSize(QSize(48,48));
 
-            pTreeWidget->expandAll();
+                QFont font;
+                font.setFamily(QStringLiteral("Times New Roman"));
+                font.setPointSize(14);
+                font.setBold(true);
+
+                QFont font2;
+                font2.setFamily(QStringLiteral("Times New Roman"));
+                font2.setPointSize(12);
+
+                foreach (TreeNode Node, TreeNodeList) {
+
+                    QTreeWidgetItem *TreeItem = new QTreeWidgetItem(pTreeWidget);
+
+                    TreeItem->setFont(0, font);
+                    TreeItem->setFont(1, font);
+                    TreeItem->setIcon(0, Node.Icon);
+                    TreeItem->setText(0, Node.Name);
+
+                    int i = 0;
+
+                    foreach (QString str, Node.List) {
+
+                        QTreeWidgetItem *TreeItemChild = new QTreeWidgetItem(TreeItem);
+                        TreeItemChild->setText(0,str);
+                        TreeItemChild->setFont(0, font2);
+                        TreeItemChild->setFont(1, font2);
+
+                        TreeItemChild->setText(2, QString::number(i++));
+
+                    }
+
+                }
+
+                pTreeWidget->expandAll();
 
     }
 
 signals:
 
 public slots:
+
+    bool SetNameValue(QString Node, QString Value){
+
+        if(Node.isEmpty()){
+
+            return false;
+        }
+
+        QTreeWidgetItemIterator it(pTreeWidget);
+
+        while (*it){
+
+            if ((*it)->text(0)==Node){
+
+                (*it)->setText(1,Value);
+
+                return true;
+
+            }
+            it++;
+
+        }
+
+        return false;
+
+    }
 
     bool SetValue(QString Node, QStringList Values){
 

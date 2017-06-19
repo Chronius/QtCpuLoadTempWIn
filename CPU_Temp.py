@@ -23,6 +23,37 @@ def get_temp_info():
         print(key, d[key])
     sys.stdout.flush()
 
+def get_temp_name():
+    w = wmi.WMI(namespace="root\OpenHardwareMonitor")
+    temp = {}
+    temperature_info = w.Sensor()
+    for sensor in temperature_info:
+        if sensor.SensorType == 'Temperature' and 'CPU Core' in sensor.Name:
+            temp.update({sensor.Name: sensor.Value})
+
+    # for key in temp.keys():
+    #     print(key, "Temperature: ", temp[key], "Load: ", round(load[key], 2), "%")
+    d = collections.OrderedDict(sorted(temp.items()))
+    for key in d.keys():
+        print(key)
+    sys.stdout.flush()
+
+def get_temp_value():
+    w = wmi.WMI(namespace="root\OpenHardwareMonitor")
+    temp = {}
+    temperature_info = w.Sensor()
+    for sensor in temperature_info:
+        if sensor.SensorType == 'Temperature' and 'CPU Core' in sensor.Name:
+            temp.update({sensor.Name: sensor.Value})
+
+    # for key in temp.keys():
+    #     print(key, "Temperature: ", temp[key], "Load: ", round(load[key], 2), "%")
+    d = collections.OrderedDict(sorted(temp.items()))
+    for key in d.keys():
+        print(d[key])
+    sys.stdout.flush()
+
+
 def temp_info():
     temp_type = {1: "CPU", 2: "BOX", 3: "ENV", 4: "BOARD", 5: "BACKPLANE", 6: "CHIPSET", 7:"VIDEO"}
     sens_count = 0
@@ -59,11 +90,18 @@ def temp_info():
 
 def main():
 
-    # get_temp_info()
-    temp_info()
+    argc = ''
+    if len(sys.argv) == 2:
+        argc = sys.argv[1]
+        if "value" == argc or "name" == argc:
+            eval("get_temp_"+argc+"()")
+        else:
+            print("error param[value or name]")
+    else:
+        exit()
+    # temp_info()
     exit(0)
 
 if __name__ == '__main__':
         main()
-        print("\tEnd test\n".upper())
         sys.stdout.flush()

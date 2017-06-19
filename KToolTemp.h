@@ -6,13 +6,13 @@
 #include <QDir>
 #include <QMap>
 #include <iostream>
-class KToolTempInfo : public QObject
+class KToolTempInfo
 {
-    Q_OBJECT
 
 public:
-    explicit KToolTempInfo(QObject *parent = 0)
-    {
+
+    KToolTempInfo(){
+
         this->sense_count = 0;
         QProcess process;
         QStringList Report;
@@ -80,6 +80,37 @@ public:
         return output;
     }
 
+    QStringList GetSensorPythonName()
+    {
+        QProcess process;
+        QStringList Report;
+        QStringList output;
+        QString sensor_name;
+
+        int res;
+
+        process.start("python " +  CurrentPath + "//CPU_Temp.py name");
+
+        if( !process.waitForStarted() || !process.waitForFinished() ) {
+
+            return Report;
+
+        }
+        Report = QString(process.readAllStandardOutput()).split("\r\n");
+        Report.removeAt(Report.size()-1);
+        for (int j = 0; j < Report.size(); j++)
+        {
+            qDebug()<<Report[j];
+
+            sensor_name = Report[j];
+            output.append(sensor_name);
+            sense_count_python++;
+        }
+
+        qDebug()<<output;
+        return output;
+    }
+
     float GetSensorValue(int num)
     {
         QProcess process;
@@ -124,13 +155,17 @@ public:
         return this->sense_count;
     }
 
+    int   GetSensorCountPython()
+    {
+        return this->sense_count_python;
+    }
+
 
 private:
     int sense_count;
+    int sense_count_python = 0;
     QString CurrentPath;
 
-signals:
 
-public slots:
 };
 #endif // KTOOLTEMPGET_H

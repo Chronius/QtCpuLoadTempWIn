@@ -18,10 +18,10 @@ class hw_info():
     def hard_info(self):
         disk_list = []
         for disk in self.w.Win32_DiskDrive():
-            #if "SanDisk Ultra" in disk.Model or "Virtual Disk" in disk.Model:
-            #    continue
-            #if "Removable" in disk.MediaType:
-            #    continue
+            if "SanDisk Ultra" in disk.Model or "Virtual Disk" in disk.Model:
+               continue
+            if "Removable" in disk.MediaType:
+               continue
             #print("Name =", disk.Name)
             print(disk.Model)
             #print("MediaType =", disk.MediaType)
@@ -148,6 +148,12 @@ class hw_info():
         num = 3
         ind_list = []
         #print("=======================================")
+        for nic in self.w.Win32_PerfFormattedData_Tcpip_NetworkInterface():
+            print(nic.Name)
+            print(nic.BytesTotalPerSec)
+            print(nic.CurrentBandwidth)
+
+        return
         for nic in self.w.Win32_NetworkAdapterConfiguration():
             #if  "I210" in str(nic.Description) and nic.MACAddress:
             if  nic.MACAddress:

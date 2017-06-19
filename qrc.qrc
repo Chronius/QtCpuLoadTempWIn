@@ -6,5 +6,14 @@
         <file>icon/network.png</file>
         <file>icon/serial_port.png</file>
         <file>icon/Thermometer.ico</file>
+        <file>icon/core.png</file>
+        <file>icon/core0.png</file>
+        <file>icon/core1.png</file>
+        <file>icon/core2.png</file>
+        <file>icon/core3.png</file>
+        <file>icon/core4.png</file>
+        <file>icon/core5.png</file>
+        <file>icon/core6.png</file>
+        <file>icon/core7.png</file>
     </qresource>
 </RCC>

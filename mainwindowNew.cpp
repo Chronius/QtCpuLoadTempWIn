@@ -7,10 +7,6 @@
 #include "KtoolGet.h"
 #include "wmivideoget.h"
 
-#define S_TO_LOAD 30
-#define S_TO_PAUSE 30
-#define S_TO_DELAY 10
-
 
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
@@ -29,27 +25,14 @@ MainWindow::MainWindow(QWidget *parent) :
 
 
     ui->plot_2->addGraph();
-    ui->plot_2->addGraph();
 
     ui->plot_2->graph(0)->setPen(QPen(QColor(0, 255, 0), 2));
     ui->plot_2->graph(0)->setBrush(QBrush(QColor(34, 177, 76, 120)));
-    ui->plot_2->graph(0)->setName("Core 1");
+    ui->plot_2->graph(0)->setName("CPU Temp");
 
     ui->plot_2->graph(1)->setPen(QPen(QColor(255, 0, 0), 2));
     ui->plot_2->graph(1)->setBrush(QBrush(QColor(200, 34, 34, 120)));
-    ui->plot_2->graph(1)->setName("Core 2");
-
-    ui->plot_2->graph(2)->setPen(QPen(QColor(0, 0, 255), 2));
-    ui->plot_2->graph(2)->setBrush(QBrush(QColor(34, 34, 200, 120)));
-    ui->plot_2->graph(2)->setName("Package");
-
-    {
-        ui->plot_2->xAxis2->setLabel("Temperature");
-        ui->plot_2->xAxis2->setLabelColor(QColor(255,255,255));
-
-        ui->plot->xAxis2->setLabel("CPU Load");
-        ui->plot->xAxis2->setLabelColor(QColor(255,255,255));
-    }
+    ui->plot_2->graph(1)->setName("SYS Temp");
 
     ui->plot->addGraph(); // add Graph 0
     ui->plot->addGraph(); // add Graph 1
@@ -62,11 +45,11 @@ MainWindow::MainWindow(QWidget *parent) :
     ui->plot->graph(2)->setPen(QPen(QColor(82, 139, 152), 2));
     ui->plot->graph(3)->setPen(QPen(QColor(0, 255, 255), 2));
 
-    ui->plot->graph()->setName("Average ");
-    ui->plot->graph(0)->setName("Core #1");
-    ui->plot->graph(1)->setName("Core #2");
-    ui->plot->graph(2)->setName("Core #3");
-    ui->plot->graph(3)->setName("Core #4");
+    ui->plot->graph()->setName("Core #1");
+    ui->plot->graph(0)->setName("Core #2");
+    ui->plot->graph(1)->setName("Core #3");
+    ui->plot->graph(2)->setName("Core #4");
+    ui->plot->graph(3)->setName("Total ");
 
     DisplayPlot(ui->plot);
     DisplayPlot(ui->plot_2);
@@ -86,9 +69,6 @@ MainWindow::MainWindow(QWidget *parent) :
 
     }
 
-
-    AddPushAutoButton();
-
     InfoSysTreeInit();
 
 
@@ -96,14 +76,28 @@ MainWindow::MainWindow(QWidget *parent) :
 
     tmr->start();
 
-    EthThread = new Worker("hw_info.py eth", 0);
+//    try{
+
+        PeriodThread = new Thread();
+
+//    }
+
+//    catch( DWORD Exp){
+
+//        PeriodThread = NULL;
+
+//    }
+    EthThread = new Worker("eth", 0);
 
     EthThread->Start();
 
-    TempThread = new Worker("CPU_Temp.py value", 0);
+    if(PeriodThread){
 
-    TempThread->Start();
+//        PeriodThread->start();
 
+        connect(PeriodThread, SIGNAL(SetValue(QString,QStringList)),InfoSysTreeView,SLOT(SetValue(QString,QStringList)));
+
+    }
 
 }
 
@@ -154,150 +148,14 @@ void MainWindow::SetCoreLoad(){
 
             qDebug()<<tb->objectName()<<" "<<CoreNum << "start";
 
-            CoreLoadThreads[CoreNum]->start(QString(QDir::currentPath() + "//core_load.exe %1").arg(CoreNum));
-
         }else{
 
             qDebug()<<tb->objectName()<<" "<<CoreNum << "stop";
 
-            CoreLoadThreads[CoreNum]->kill();
-
-            //CoreLoadThreads[CoreNum]->waitForFinished(1000);
-
         }
 
     }
 
-}
-
-void MainWindow::AddPushAutoButton(){
-
-    QPushButton *pushButton = new QPushButton(ui->centralWidget);
-
-    pushButton->setObjectName(QString("Auto"));
-
-    pushButton->setCheckable(true);
-
-    pushButton->setMaximumWidth(50);
-
-    pushButton->setMaximumHeight(50);
-
-
-    pushButton->setText("AUTO");
-
-    pushButton->setIconSize(QSize(50,50));
-
-    ui->horizontalLayout->addWidget(pushButton);
-
-    connect(pushButton,SIGNAL(released()),this,SLOT(SetAutoMode()));
-
-
-    tmrAutoLoad = new QTimer;
-
-    tmrAutoLoad->setInterval(S_TO_DELAY * tmr_s_elapsed * SEC_TO_MSEC);
-
-    connect(tmrAutoLoad, SIGNAL(timeout()),this,SLOT(runAutoLoad()));
-
-}
-/*Слот отвечающий за нажатие на кнопку AUTO*/
-void MainWindow::SetAutoMode(){
-
-    QObject* obj=QObject::sender();
-    if (QPushButton *tb=qobject_cast<QPushButton *>(obj)){
-
-        if(tb->isChecked())
-        {
-
-            qDebug()<<tb->objectName()<<" "<< "start";
-
-            for (int i = 0; i < PushButtonArray.size(); i++)
-            {
-                if (PushButtonArray[i]->isChecked())
-                {
-                    PushButtonArray[i]->setChecked(false);
-                    emit PushButtonArray[i]->released();
-                }
-
-                PushButtonArray[i]->setEnabled(false);
-
-            }
-
-            tmrAutoLoad->start();
-
-        }
-        else
-        {
-
-            tmrAutoLoad->stop();
-
-            for (int i = 0; i < PushButtonArray.size(); i++)
-            {
-                if (PushButtonArray[i]->isChecked())
-                {
-                    PushButtonArray[i]->setChecked(false);
-                    emit PushButtonArray[i]->released();
-                }
-
-                PushButtonArray[i]->setEnabled(true);
-
-            }
-
-            qDebug()<<tb->objectName()<<" "<< "stop";
-
-        }
-
-    }
-
-
-}
-/*Слот для загрузки в авто режиме*/
-void MainWindow::runAutoLoad()
-{
-    qDebug()<<"runAutoLoad";
-    if(tmrAutoLoad->interval() == S_TO_DELAY * tmr_s_elapsed * SEC_TO_MSEC)
-    {
-        for (int i  = 0; i < CoreNum; i++)
-        {
-            if (CoreLoadThreads[i]->state() == QProcess::ProcessState::Running)
-            {
-                continue;
-            }
-            else
-            {
-
-                if (i == CoreNum - 1)
-                {
-                    tmrAutoLoad->setInterval(S_TO_LOAD * tmr_s_elapsed * SEC_TO_MSEC);
-                }
-
-                PushButtonArray[i]->setChecked(true);
-                emit PushButtonArray[i]->released();
-
-                break;
-
-            }
-        }
-    }
-    else
-    {
-        tmrAutoLoad->setInterval((S_TO_DELAY+1) * tmr_s_elapsed * SEC_TO_MSEC);
-        for (int i  = 0; i < CoreNum; i++)
-        {
-            if (i == CoreNum - 1)
-            {
-                tmrAutoLoad->setInterval(S_TO_DELAY * tmr_s_elapsed * SEC_TO_MSEC);
-                tmrAutoLoad->stop();
-                tmrAutoLoad->start();
-                first_load != first_load;
-            }
-            if (CoreLoadThreads[i]->state() == QProcess::ProcessState::Running)
-            {
-                PushButtonArray[i]->setChecked(false);
-                emit PushButtonArray[i]->released();
-                break;
-            }
-        }
-    }
 }
 
 void MainWindow::InitTextLabel(){
@@ -329,8 +187,66 @@ void MainWindow::resizeEvent(QResizeEvent *)
 
 }
 
-void MainWindow::UpdateTreeView()
-{
+void MainWindow::UpdateTreeView(){
+
+    /*
+    qDebug()<<"Update tree view";
+
+    foreach (QString key, WrkMap.keys()) {
+
+        if(!WrkMap[key]->isProcessing()){
+
+            QStringList report = WrkMap[key]->GetReport();
+
+            QStringList outrep;
+
+            int Delay = 0;
+
+            if((key == "Жесткие диски")||
+                (key == "Память")||
+                    (key == "Сетевые интерфейсы")){
+
+                for(int i = 1; i < report.length(); i+=2){
+
+                    outrep.append(report[i]);
+
+                }
+
+            } else {
+
+                outrep = report;
+
+            }
+
+            InfoSysTreeView->SetValue(key, outrep);
+
+            if(key == "Жесткие диски"){
+
+                continue;
+
+            }
+            if(key == "Память"){
+
+                Delay = 8;
+
+            }
+
+            if(key == "Сетевые интерфейсы"){
+
+                continue;
+
+            }
+
+            qDebug()<<"Starting script:" << key;
+
+            WrkMap[key]->Start(Delay);
+
+        }
+
+    }
+
+    */
+
 
 }
 
@@ -377,8 +293,6 @@ void MainWindow::InfoSysTreeInit()
         Node.List << CPUName;
         AddPushButton();
 
-        CoreLoadThreads[core_num] = new QProcess();
-
     }
 
     TreeNodeList.append(Node);
@@ -402,15 +316,9 @@ void MainWindow::InfoSysTreeInit()
 
     QStringList Name = Wmi->GetValue("Win32_PhysicalMemory", "Manufacturer");
 
-
     QStringList Capacity = Wmi->GetValue("Win32_PhysicalMemory", "Capacity");
 
     for(int i=0; i < Name.size(); i++){
-
-        if (Name[i].indexOf("0112") >= 0)
-        {
-            Name[i] = "DRAM Apacer Technology";
-        }
 
         qDebug()<< Capacity[i].toULongLong()/(1024*1024*1024);
 
@@ -507,7 +415,6 @@ void MainWindow::InfoSysTreeInit()
 
 
         QStringList Ktoollist = KtlTemp->GetSensorName();
-        Ktoollist = KtlTemp->GetSensorPythonName();
 
         if(Ktoollist.size())
         {
@@ -637,7 +544,6 @@ void MainWindow::CustomPlot(QCustomPlot * plot)
     /* Подключаем сигнал от Оси X об изменении видимого диапазона координат
      * к СЛОТу для переустановки формата времени оси.
      * */
-
     connect(plot->xAxis, SIGNAL(rangeChanged(QCPRange)),
             this, SLOT(slotRangeChanged(QCPRange)));
 }
@@ -647,19 +553,19 @@ void MainWindow::DisplayPlot(QCustomPlot * plot)
     foo = QDateTime::currentDateTime().toTime_t();
 
     plot->xAxis->setDateTimeFormat("hh:mm:ss");
-
     plot->xAxis->setRange(foo, foo+60);
 
-    ui->plot->yAxis->setRange(0, 125);
-    ui->plot->yAxis->setRange(0, 125);
-
-    ui->plot_2->yAxis->setRange(20, 100);
-    ui->plot_2->yAxis->setRange(20, 100);
+    plot->yAxis->setRange(0, 100);
     plot->replot();           // Отрисовываем график
 }
 
 void MainWindow::updateTime()
 {
+    TimeLabel->setText(QTime::currentTime().toString());
+
+    foo = QDateTime::currentDateTime().toTime_t();
+
+
     /*DEBUG LINE*/
     {
 //        QStringList output = EthThread->GetReport();
@@ -690,7 +596,7 @@ void MainWindow::updateTime()
 
                 NetUsage = (NetUsage>100)?100:NetUsage;
 
-                EthSpeed << ((NetUsage<0)?"Не активен":(QString::number(NetUsage) + " %"));
+                EthSpeed << ((NetUsage<0)?"":(QString::number(NetUsage) + " %"));
 
             }
         }
@@ -698,10 +604,7 @@ void MainWindow::updateTime()
         InfoSysTreeView->SetValue("Сетевые интерфейсы", EthSpeed);
     }
 
-
-    TimeLabel->setText(QTime::currentTime().toString());
-//    TimeLabel->setText(QString::number(foo));
-
+//    QStringList CoreLoadList = Wmi->GetValue("Win32_PerfFormattedData_PerfOS_Processor", "PercentProcessorTime");
 
     QMap <QString, int> QMapCorePerfFoo = Wmi->QGetPerfomance();
     for (auto it = QMapCorePerfFoo.begin(); it != QMapCorePerfFoo.end(); ++it)
@@ -710,6 +613,13 @@ void MainWindow::updateTime()
     }
     QMapCorePerfFoo.clear();
 
+
+//    for (int coreNum = 0; coreNum < CoreNum; coreNum++){
+
+//        GraphLoadCpu.append(CoreLoadList[coreNum].toInt());
+
+
+//    }
 
     PlotLoadCpu();
 
@@ -727,6 +637,36 @@ void MainWindow::updateTime()
 
     InfoSysTreeView->SetNameValue("Процессор", QString::number(GraphLoadCpu[CoreNum]) + " %");
 
+    /*
+
+    QStringList Name = Wmi->GetValue("Win32_PerfFormattedData_Tcpip_NetworkInterface", "Name");
+
+    QStringList SpeedList = Wmi->GetValue("Win32_PerfFormattedData_Tcpip_NetworkInterface", "BytesTotalPerSec");
+
+    QStringList Bandwidth = Wmi->GetValue("Win32_PerfFormattedData_Tcpip_NetworkInterface", "CurrentBandwidth");
+
+
+    //QStringList Coonections = Wmi->GetValue("Win32_NetworkConnection", "ConnectionType");
+
+    QStringList EthSpeed;
+
+    for(int i = 0; i < Name.size(); i++) {
+
+        if(Name[i].indexOf(NET_ADAPTER_FILTER)>=0){
+
+            int NetUsage = (int)(((double)(SpeedList[i].toLongLong()*8)/Bandwidth[i].toLongLong())*100);
+
+            EthSpeed << QString("%1 %").arg((NetUsage>100)?100:NetUsage);
+
+            //EthSpeed << QString("%1 %").arg((int)(((double)SpeedList[i].toLongLong())*8));
+
+        }
+
+    }
+
+    InfoSysTreeView->SetValue("Сетевые интерфейсы",EthSpeed);
+
+*/
 
     GraphLoadCpu.clear();
 }
@@ -736,20 +676,34 @@ void MainWindow::PlotLoadCpu()
     ui->plot->xAxis->setDateTimeFormat("hh:mm:ss");
     ui->plot->xAxis->setRange(foo-60, foo);
 
+    //Добавление новых значений на график
+//    ValList << QString::number((int)GraphLoadCpu[0]) + " %";
+
+//    ui->plot->graph(0)->addData(foo, GraphLoadCpu[1]);
+//    ValList << QString::number((int)GraphLoadCpu[1]) + " %";
+
+//    ui->plot->graph(1)->addData(foo, GraphLoadCpu[2]);
+//    ui->plot->graph(2)->addData(foo, GraphLoadCpu[3]);
+//    ui->plot->graph(3)->addData(foo, GraphLoadCpu[4]);
 
     QStringList ValList;
 
+    for(int core_num = 0; core_num < CoreNum; core_num++)
+    {
 
-        ui->plot->graph()->addData(foo, GraphLoadCpu[CoreNum]);
+       if(core_num == 0){
 
-        for(int core_num = 0; core_num < CoreNum; core_num++)
-        {
+            ui->plot->graph()->addData(foo, GraphLoadCpu[core_num]);
 
-            ui->plot->graph(core_num)->addData(foo, GraphLoadCpu[core_num]);
+       }else{
 
-            ValList << QString::number((int)GraphLoadCpu[core_num]) + " %";
+            ui->plot->graph(core_num-1)->addData(foo, GraphLoadCpu[core_num]);
 
-        }
+       }
+
+        ValList << QString::number((int)GraphLoadCpu[core_num]) + " %";
+
+    }
 
     InfoSysTreeView->SetValue("Процессор",ValList);
 
@@ -772,31 +726,17 @@ void MainWindow::UpdateTreeSensor()
     InfoSysTreeView->SetValue("Датчики напряжения питания", ValList);
     ValList.clear();
 
-
-
-    QStringList TempReport = TempThread->GetReport();
-
-    qDebug()<< "TempThread"<<TempReport;
-
     if(KtlTemp){
 
-        for(int i = 0; i < KtlTemp->GetSensorCountPython(); i++)
+        for(int i = 0; i < KtlTemp->GetSensorCount(); i++)
         {
-            value = TempReport[i].toDouble();
+            value = KtlTemp->GetSensorValue(i);
             ValList << QString::number(value);
             GraphTempCpu.append(value);
-
-//            value = KtlTemp->GetSensorValue(i);
-//            ValList << QString::number(value);
-//            GraphTempCpu.append(value);
         }
 
-        ui->plot_2->graph(0)->addData(foo, GraphTempCpu[0]);
-        ui->plot_2->graph(1)->addData(foo, GraphTempCpu[1]);
-        ui->plot_2->graph(2)->addData(foo, GraphTempCpu[2]);
-
-//        ui->plot_2->graph()->addData(foo, GraphTempCpu[0]);
-//        ui->plot_2->graph(0)->addData(foo, GraphTempCpu[1]);
+        ui->plot_2->graph()->addData(foo, GraphTempCpu[0]);
+        ui->plot_2->graph(0)->addData(foo, GraphTempCpu[1]);
 
     }
 

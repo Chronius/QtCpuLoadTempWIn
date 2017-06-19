@@ -32,7 +32,7 @@ int main(int argc, char *argv[])
 {
     QApplication a(argc, argv);
 
-    qInstallMessageHandler(myMessageHandler);
+    //qInstallMessageHandler(myMessageHandler);
 
     MainWindow w;
     w.show();

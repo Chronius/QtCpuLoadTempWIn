@@ -6,13 +6,13 @@
 #include <QDir>
 #include <QMap>
 #include <iostream>
-class KToolInfo : public QObject
+class KToolInfo
 {
-    Q_OBJECT
 
 public:
-    explicit KToolInfo(QObject *parent = 0)
-    {
+
+    KToolInfo(){
+
         this->sense_count = 0;
         QProcess process;
         QStringList Report;
@@ -31,7 +31,7 @@ public:
 
         if( !process.waitForStarted() || !process.waitForFinished() ) {
 
-            throw(std::runtime_error("err in run ktool32"));
+            throw std::runtime_error("err in run ktool32");
 
         }
 
@@ -210,13 +210,9 @@ private:
         return QString();
     }
 
-void exeption()
-{
+void exeption(){
 
 }
 
-signals:
-
-public slots:
 };
 #endif // KTOOLGET_H

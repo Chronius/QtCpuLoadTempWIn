@@ -23,7 +23,7 @@ public:
 
         foreach (QSerialPortInfo SerialInfo, SerialPortInfo) {
 
-            if(Manufacture == SerialInfo.manufacturer()){
+            if((Manufacture.isEmpty())||(Manufacture == SerialInfo.manufacturer())){
 
                 List << QString("%1 (%2)").arg(SerialInfo.description()).arg(SerialInfo.portName());
 

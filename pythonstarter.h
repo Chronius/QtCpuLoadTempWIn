@@ -50,7 +50,7 @@ public slots:
 
         Report.clear();
 
-        QThread::sleep(Delay);
+//        QThread::sleep(Delay);
 
         do{
 
@@ -63,15 +63,16 @@ public slots:
 
 #ifdef QT_DEBUG
 
-    QString CurrentPath = QDir::currentPath() + "//..//";
+    QString CurrentPath = QDir::currentPath();
 
 #else
 
-    QString CurrentPath = QDir::currentPath() + "//..//";
+    QString CurrentPath = QDir::currentPath();
 
 #endif
 
-            process.start( "python " + CurrentPath + "//hw_info.py " + Argc);
+//            process.start( "python " + CurrentPath + "//hw_info.py " + Argc);
+            process.start( "python " + CurrentPath + "//" + Argc);
 
             if( !process.waitForStarted() || !process.waitForFinished() ) {
 
@@ -83,9 +84,10 @@ public slots:
 
             Report.removeAt(Report.size()-1);
 
-            //qDebug()<<Report;
+            qDebug()<<Report;
+            QThread::msleep(500);
 
-        } while(false);
+        } while(true);
 
         emit finished();
 
@@ -130,16 +132,6 @@ QStringList GetReport(){
 }
 
 void Start(){
-
-    thread->start();
-
-}
-
-void Start(int delay){
-
-    qDebug()<<delay;
-
-    PyStart->SetDelay(delay);
 
     thread->start();
 
